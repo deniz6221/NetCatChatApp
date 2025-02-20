@@ -34,7 +34,7 @@ def send_json(ip, message):
     message.stdin.close()
 
 username = input("Enter your name: ")
-server = subprocess.Popen([nc_command, '-l', '40000'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+server = subprocess.Popen([nc_command, '-lknp', '40000'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 my_ip = get_ip()
 ip_subnet = get_ip_subnet(my_ip)
@@ -45,10 +45,10 @@ discoverJson = json.dumps({"type": "DISCOVER", "sender_ip": my_ip, "sender_name"
 
 online_users = []
 discovers = []
-for i in range(26,28):
+for i in range(39,40):
     current_discover = ip_subnet + "." + str(i)
-    #if current_discover == my_ip:
-    #    continue
+    if current_discover == my_ip:
+        continue
     discover = subprocess.Popen([nc_command, current_discover, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     discover.stdin.write(discoverJson.encode())
     discovers.append(discover)
@@ -60,6 +60,7 @@ for discover in discovers:
         if (message["type"] == "REPLY_DISCOVER"):
             online_users.append({"ip": message["reply_ip"], "name": message["reply_name"], "unread_messages": 0})
     except:
+        discover.kill()
         pass        
 
     
@@ -68,11 +69,16 @@ for discover in discovers:
 while True:
     output = server.stdout.readline().decode()
     if output:
-        message = json.loads(output.strip())
-        message_type = message["type"]
-        if (message_type == "DISCOVER"):
-            online_users.append({"ip": message["sender_ip"], "name": message["sender_name"], "unread_messages": 0})
-            #reply_discover = send_json(message["sender_ip"], {"type": "REPLY_DISCOVER", "reply_ip": my_ip, "reply_name": username})
-            render_online_users(online_users)
+        try:
+            message = output.strip()
+            print(message)
+            message = json.loads(message)
+            message_type = message["type"]
+            if (message_type == "DISCOVER"):
+                online_users.append({"ip": message["sender_ip"], "name": message["sender_name"], "unread_messages": 0})
+                reply_discover = send_json(message["sender_ip"], {"type": "REPLY_DISCOVER", "reply_ip": my_ip, "reply_name": username})
+                render_online_users(online_users)
+        except:
+            pass        
 
     time.sleep(0.01)    
