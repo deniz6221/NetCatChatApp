@@ -30,8 +30,9 @@ def render_online_users(online_users):
 
 
 def send_json(user, message):
-    messageJson = json.dumps(message)
+    messageJson = json.dumps(message) + "\n"
     user["process"].stdin.write(messageJson.encode())
+    user["process"].stdin.flush()
 
 
 username = input("Enter your name: ")
@@ -42,27 +43,19 @@ ip_subnet = get_ip_subnet(my_ip)
 print("My IP:", my_ip)
 print("IP Subnet:", ip_subnet)
 
-discoverJson = json.dumps({"type": "DISCOVER", "sender_ip": my_ip, "sender_name": username})
+discoverJson = json.dumps({"type": "DISCOVER", "sender_ip": my_ip, "sender_name": username}) + "\n"
 
 online_users = []
-discovers = []
+
 for i in range(39,40):
     current_discover = ip_subnet + "." + str(i)
     if current_discover == my_ip:
         continue
     discover = subprocess.Popen([nc_command, current_discover, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     discover.stdin.write(discoverJson.encode())
-    discovers.append(discover)
+    discover.stdin.flush()
+    discover.kill()
 
-for discover in discovers:
-    line = discover.stdout.readline().decode()
-    try:
-        message = json.loads(line.strip())
-        if (message["type"] == "REPLY_DISCOVER"):
-            online_users.append({"ip": message["reply_ip"], "name": message["reply_name"], "unread_messages": 0, "process": discover, "messages": []})
-    except:
-        discover.kill()
-        pass
     
 renderState = 1
 active_user = -1
@@ -137,7 +130,15 @@ def serverThread():
                                 if renderState != 2 and renderState != 3:
                                     user["unread_messages"] += 1
                                 else:    
-                                    renderState = 3                             
+                                    renderState = 3  
+                elif (message_type == "REPLY_DISCOVER"):
+                    sender_ip = message["reply_ip"]
+                    sender_name = message["reply_name"]
+                    new_process = subprocess.Popen([nc_command, sender_ip, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    with thread_lock:
+                        online_users.append({"ip": sender_ip, "name": sender_name, "unread_messages": 0, "process": new_process, "messages": []})
+                        if renderState == 0:
+                            renderState = 1
             except:
                 pass
 
