@@ -46,16 +46,26 @@ print("IP Subnet:", ip_subnet)
 discoverJson = json.dumps({"type": "DISCOVER", "sender_ip": my_ip, "sender_name": username}) + "\n"
 
 online_users = []
-
+discovers = []
+print("Discovering users in the network...")
 for i in range(39,40):
     current_discover = ip_subnet + "." + str(i)
     if current_discover == my_ip:
         continue
-    discover = subprocess.Popen([nc_command, current_discover, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    discover = subprocess.Popen([nc_command, "-q", "1", current_discover, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     discover.stdin.write(discoverJson.encode())
     discover.stdin.flush()
-    discover.kill()
+    discover.stdin.close()
+    discovers.append(discover)
 
+
+for discover in discovers:
+    try:
+        discover.wait(timeout=1)
+    except:
+        discover.terminate()
+
+    
     
 renderState = 1
 active_user = -1
@@ -68,8 +78,9 @@ def renderThread():
     while True:
         with thread_lock:
             if renderState == 1:
-                print("\n\n\n")
+                print("\n\n")
                 render_online_users(online_users)
+                print()
                 if (len(online_users) != 0):
                     print("Enter user index to view chat: ")
                 renderState = 0
@@ -78,6 +89,7 @@ def renderThread():
                 print(f"Chat with {online_users[active_user]['name']}:")
                 for message in online_users[active_user]["messages"]:
                     print(f"{message['sender']}: {message['message']}")
+                print()    
                 print("Enter message or enter Q to go back to previous menu: ")    
                 renderState = 2            
         time.sleep(0.3)
@@ -108,6 +120,7 @@ def serverThread():
                 print(message)
                 message = json.loads(message)
                 message_type = message["type"]
+                print(f"Message type: {message_type}")
                 if (message_type == "DISCOVER"):
                     sender_ip = message["sender_ip"]
                     new_process = subprocess.Popen([nc_command, sender_ip, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -120,15 +133,18 @@ def serverThread():
                         if renderState == 0:
                             renderState = 1
                 elif (message_type == "MESSAGE"):
+
                     sender_ip = message["sender_ip"]
-                    message = message["message"]
+                    payload = message["payload"]
                     sender_name = message["sender_name"]
+
                     with thread_lock:
                         for user in online_users:
                             if user["ip"] == sender_ip:
-                                user["messages"].append({"sender": sender_name, "message": message})
+                                user["messages"].append({"sender": sender_name, "message": payload})
                                 if renderState != 2 and renderState != 3:
                                     user["unread_messages"] += 1
+                                    renderState = 1
                                 else:    
                                     renderState = 3  
                 elif (message_type == "REPLY_DISCOVER"):
@@ -155,6 +171,7 @@ def inputThread():
                     print("Invalid user index")
                     continue
                 active_user = int(userInput) - 1
+                online_users[active_user]["unread_messages"] = 0
                 renderState = 3
             else:
                 message = userInput
@@ -162,7 +179,7 @@ def inputThread():
                     renderState = 1
                 else:
                     online_users[active_user]["messages"].append({"sender": username, "message": message})
-                    send_json(online_users[active_user], {"type": "MESSAGE", "sender_ip": my_ip, "sender_name": username, "message": message})
+                    send_json(online_users[active_user], {"type": "MESSAGE", "sender_ip": my_ip, "sender_name": username, "payload": message})
                     renderState = 3
         time.sleep(0.5)        
 
