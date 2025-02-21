@@ -40,15 +40,13 @@ server = subprocess.Popen([nc_command, '-lknp', '40000'], stdin=subprocess.PIPE,
 
 my_ip = get_ip()
 ip_subnet = get_ip_subnet(my_ip)
-print("My IP:", my_ip)
-print("IP Subnet:", ip_subnet)
 
 discoverJson = json.dumps({"type": "DISCOVER", "sender_ip": my_ip, "sender_name": username}) + "\n"
 
 online_users = []
 discovers = []
 print("Discovering users in the network...")
-for i in range(39,40):
+for i in range(1, 255):
     current_discover = ip_subnet + "." + str(i)
     if current_discover == my_ip:
         continue
@@ -72,20 +70,21 @@ active_user = -1
 thread_lock = threading.Lock()
 
 
+
 def renderThread():
     global renderState
     global active_user
     while True:
         with thread_lock:
             if renderState == 1:
-                print("\n\n")
+                os.system('cls' if os.name == 'nt' else 'clear')
                 render_online_users(online_users)
                 print()
                 if (len(online_users) != 0):
                     print("Enter user index to view chat: ")
                 renderState = 0
             elif renderState == 3:
-                print("\n\n\n")
+                os.system('cls' if os.name == 'nt' else 'clear')
                 print(f"Chat with {online_users[active_user]['name']}:")
                 for message in online_users[active_user]["messages"]:
                     print(f"{message['sender']}: {message['message']}")
@@ -117,17 +116,13 @@ def serverThread():
         if output:
             try:
                 message = output.strip()
-                print(message)
                 message = json.loads(message)
                 message_type = message["type"]
-                print(f"Message type: {message_type}")
                 if (message_type == "DISCOVER"):
                     sender_ip = message["sender_ip"]
                     new_process = subprocess.Popen([nc_command, sender_ip, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    print("Discover message received")
                     
                     with thread_lock:
-                        print("Lock acquired for online users list")
                         online_users.append({"ip": sender_ip, "name": message["sender_name"], "unread_messages": 0, "process": new_process, "messages": []})
                         send_json(online_users[-1], {"type": "REPLY_DISCOVER", "reply_ip": my_ip, "reply_name": username})
                         if renderState == 0:
@@ -187,9 +182,7 @@ serverThread = threading.Thread(target=serverThread)
 serverThread.daemon = True
 serverThread.start()
 
-renderThread = threading.Thread(target=renderThread)
-renderThread.daemon = True
-renderThread.start()
+
 
 disconnectThread = threading.Thread(target=disconnectThread)
 disconnectThread.daemon = True
@@ -198,5 +191,12 @@ disconnectThread.start()
 inputThread = threading.Thread(target=inputThread)
 inputThread.daemon = True
 inputThread.start()
+
+time.sleep(1)
+os.system('cls' if os.name == 'nt' else 'clear')
+
+renderThread = threading.Thread(target=renderThread)
+renderThread.daemon = True
+renderThread.start()
 
 inputThread.join()
