@@ -30,9 +30,12 @@ def render_online_users(online_users):
 
 
 def send_json(user, message):
-    messageJson = json.dumps(message) + "\n"
-    user["process"].stdin.write(messageJson.encode())
-    user["process"].stdin.flush()
+    try:
+        messageJson = json.dumps(message) + "\n"
+        user["process"].stdin.write(messageJson.encode())
+        user["process"].stdin.flush()
+    except:
+        pass    
 
 
 username = input("Enter your name: ")
@@ -50,18 +53,20 @@ for i in range(1, 255):
     current_discover = ip_subnet + "." + str(i)
     if current_discover == my_ip:
         continue
-    discover = subprocess.Popen([nc_command, "-q", "1", current_discover, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    discover = subprocess.Popen([nc_command , current_discover, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     discover.stdin.write(discoverJson.encode())
     discover.stdin.flush()
     discover.stdin.close()
     discovers.append(discover)
 
+time.sleep(1)
 
 for discover in discovers:
+    discover.terminate()
     try:
-        discover.wait(timeout=1)
-    except:
-        discover.terminate()
+        discover.wait(timeout=0.1) 
+    except subprocess.TimeoutExpired:
+        discover.kill()
 
     
     
