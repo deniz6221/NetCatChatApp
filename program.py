@@ -44,7 +44,7 @@ server = subprocess.Popen([nc_command, '-lknp', '40000'], stdin=subprocess.PIPE,
 my_ip = get_ip()
 ip_subnet = get_ip_subnet(my_ip)
 
-discoverJson = json.dumps({"type": "DISCOVER", "sender_ip": my_ip, "sender_name": username}) + "\n"
+discoverJson = json.dumps({"type": "DISCOVER_REQ", "sender_ip": my_ip, "sender_name": username}) + "\n"
 
 online_users = []
 discovers = []
@@ -123,13 +123,13 @@ def serverThread():
                 message = output.strip()
                 message = json.loads(message)
                 message_type = message["type"]
-                if (message_type == "DISCOVER"):
+                if (message_type == "DISCOVER_REQ"):
                     sender_ip = message["sender_ip"]
                     new_process = subprocess.Popen([nc_command, sender_ip, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     
                     with thread_lock:
                         online_users.append({"ip": sender_ip, "name": message["sender_name"], "unread_messages": 0, "process": new_process, "messages": []})
-                        send_json(online_users[-1], {"type": "REPLY_DISCOVER", "reply_ip": my_ip, "reply_name": username})
+                        send_json(online_users[-1], {"type": "DISCOVER_RESP", "responder_ip": my_ip, "responder_name": username})
                         if renderState == 0:
                             renderState = 1
                 elif (message_type == "MESSAGE"):
@@ -147,9 +147,9 @@ def serverThread():
                                     renderState = 1
                                 else:    
                                     renderState = 3  
-                elif (message_type == "REPLY_DISCOVER"):
-                    sender_ip = message["reply_ip"]
-                    sender_name = message["reply_name"]
+                elif (message_type == "DISCOVER_RESP"):
+                    sender_ip = message["responder_ip"]
+                    sender_name = message["responder_name"]
                     new_process = subprocess.Popen([nc_command, sender_ip, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                     with thread_lock:
                         online_users.append({"ip": sender_ip, "name": sender_name, "unread_messages": 0, "process": new_process, "messages": []})
@@ -179,7 +179,7 @@ def inputThread():
                     renderState = 1
                 else:
                     online_users[active_user]["messages"].append({"sender": username, "message": message})
-                    send_json(online_users[active_user], {"type": "MESSAGE", "sender_ip": my_ip, "sender_name": username, "payload": message})
+                    send_json(online_users[active_user], {"type": "MESSAGE", "sender_ip": my_ip, "sender_name": username, "payload": message, "timestamp": int(time.time())})
                     renderState = 3
         time.sleep(0.5)        
 
