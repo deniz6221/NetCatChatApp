@@ -2,21 +2,41 @@ import json
 import os
 import subprocess
 import time
-import socket
+import re
 import threading
-
+from datetime import datetime
 global nc_command
 nc_command = "ncat" if os.name == "nt" else "nc"
 
 
 def get_ip():
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect(("8.8.8.8", 80))  
-            return s.getsockname()[0] 
-    except Exception as e:
-        return "192.168.1.1"
+        if os.name == "nt":  #Windows
+            output = subprocess.run(["ipconfig"], capture_output=True, text=True, encoding="utf-8", errors="ignore").stdout
+            ip_addresses = re.findall(r'IPv4 Address[.\s]+: (\d+\.\d+\.\d+\.\d+)', output)
+            gateways = re.findall(r'Default Gateway[.\s]+: (\d+\.\d+\.\d+\.\d+)', output)
+
+            for ip in ip_addresses:
+                if any(gw.startswith(ip.rsplit('.', 1)[0]) for gw in gateways):
+                    return ip  
+
+            return ip_addresses[0] if ip_addresses else "192.168.1.1"
+
+        else:  # Linux/macOS
+            output = subprocess.run(["ip", "-4", "addr", "show"], capture_output=True, text=True, encoding="utf-8", errors="ignore").stdout
+            matches = re.findall(r'inet (\d+\.\d+\.\d+\.\d+)/\d+', output)
+
+            for ip in matches:
+                if not ip.startswith("127."):  
+                    return ip
+
+            return "192.168.1.1"
     
+    except Exception:
+        pass
+    return "192.168.1.1"
+
+
 def get_ip_subnet(ip):
     return ".".join(ip.split(".")[:-1])
 
@@ -47,7 +67,7 @@ ip_subnet = get_ip_subnet(my_ip)
 discoverJson = json.dumps({"type": "DISCOVER_REQ", "sender_ip": my_ip, "sender_name": username}) + "\n"
 
 online_users = []
-print("Discovering users in the network...")
+print("Discovering users in the network, this might take a while...")
 
 def discover_users(ip_start, ip_end):
     discovers = []
@@ -58,18 +78,26 @@ def discover_users(ip_start, ip_end):
         discover = subprocess.Popen([nc_command ,"-w", "1" , current_discover, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         discover.stdin.write(discoverJson.encode())
         discover.stdin.flush()
-        discover.stdin.close()
+
         discovers.append(discover)
 
+    time.sleep(1)
 
     for discover in discovers:
-        discover.wait()
-    
-discover_users(1, 50)
-discover_users(50, 100)
-discover_users(100, 150)
-discover_users(150, 200)
-discover_users(200, 255)
+        try:
+            discover.stdin.close()
+        except:
+            pass
+        finally:    
+            discover.wait()
+
+last = 0
+for i in range(1, 255, 50):
+    discover_users(last, i)
+    last = i
+
+discover_users(last, 255)
+
     
     
 renderState = 1
@@ -94,7 +122,7 @@ def renderThread():
                 os.system('cls' if os.name == 'nt' else 'clear')
                 print(f"Chat with {online_users[active_user]['name']}:")
                 for message in online_users[active_user]["messages"]:
-                    print(f"{message['sender']}: {message['message']}")
+                    print(f"{message['sender']}: {message['message']} ({datetime.fromtimestamp(int(message['timestamp'])).strftime('%d.%m.%Y %H:%M:%S')})")
                 print()    
                 print("Enter message or enter Q to go back to previous menu: ")    
                 renderState = 2            
@@ -136,19 +164,19 @@ def serverThread():
                             renderState = 1
                 elif (message_type == "MESSAGE"):
 
-                    sender_ip = message["sender_ip"]
                     payload = message["payload"]
                     sender_name = message["sender_name"]
 
                     with thread_lock:
                         for user in online_users:
-                            if user["ip"] == sender_ip:
-                                user["messages"].append({"sender": sender_name, "message": payload})
+                            if user["name"] == sender_name:
+                                user["messages"].append({"sender": sender_name, "message": payload, "timestamp": message["timestamp"]})
                                 if renderState != 2 and renderState != 3:
                                     user["unread_messages"] += 1
                                     renderState = 1
                                 else:    
-                                    renderState = 3  
+                                    renderState = 3 
+                                break         
                 elif (message_type == "DISCOVER_RESP"):
                     sender_ip = message["responder_ip"]
                     sender_name = message["responder_name"]
@@ -180,8 +208,8 @@ def inputThread():
                 if message == "Q":
                     renderState = 1
                 else:
-                    online_users[active_user]["messages"].append({"sender": username, "message": message})
-                    send_json(online_users[active_user], {"type": "MESSAGE", "sender_ip": my_ip, "sender_name": username, "payload": message, "timestamp": f"{int(time.time())}"})
+                    online_users[active_user]["messages"].append({"sender": username, "message": message, "timestamp": f"{int(time.time())}"})
+                    send_json(online_users[active_user], {"type": "MESSAGE", "sender_name": username, "payload": message, "timestamp": f"{int(time.time())}"})
                     renderState = 3
         time.sleep(0.5)        
 
