@@ -57,8 +57,10 @@ def send_json(user, message):
     except:
         pass    
 
-
-username = input("Enter your name: ")
+username = ""
+while username.strip() == "":
+    username = input("Enter your name: ")
+    
 server = subprocess.Popen([nc_command, '-lknp', '40000'], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 my_ip = get_ip()
