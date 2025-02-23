@@ -47,27 +47,29 @@ ip_subnet = get_ip_subnet(my_ip)
 discoverJson = json.dumps({"type": "DISCOVER_REQ", "sender_ip": my_ip, "sender_name": username}) + "\n"
 
 online_users = []
-discovers = []
 print("Discovering users in the network...")
-for i in range(1, 255):
-    current_discover = ip_subnet + "." + str(i)
-    if current_discover == my_ip:
-        continue
-    discover = subprocess.Popen([nc_command , current_discover, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    discover.stdin.write(discoverJson.encode())
-    discover.stdin.flush()
-    discover.stdin.close()
-    discovers.append(discover)
 
-time.sleep(1)
+def discover_users(ip_start, ip_end):
+    discovers = []
+    for i in range(ip_start, ip_end):
+        current_discover = ip_subnet + "." + str(i)
+        if current_discover == my_ip:
+            continue
+        discover = subprocess.Popen([nc_command ,"-w", "1" , current_discover, "40000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        discover.stdin.write(discoverJson.encode())
+        discover.stdin.flush()
+        discover.stdin.close()
+        discovers.append(discover)
 
-for discover in discovers:
-    discover.terminate()
-    try:
-        discover.wait(timeout=0.1) 
-    except subprocess.TimeoutExpired:
-        discover.kill()
 
+    for discover in discovers:
+        discover.wait()
+    
+discover_users(1, 50)
+discover_users(50, 100)
+discover_users(100, 150)
+discover_users(150, 200)
+discover_users(200, 255)
     
     
 renderState = 1
@@ -179,7 +181,7 @@ def inputThread():
                     renderState = 1
                 else:
                     online_users[active_user]["messages"].append({"sender": username, "message": message})
-                    send_json(online_users[active_user], {"type": "MESSAGE", "sender_ip": my_ip, "sender_name": username, "payload": message, "timestamp": int(time.time())})
+                    send_json(online_users[active_user], {"type": "MESSAGE", "sender_ip": my_ip, "sender_name": username, "payload": message, "timestamp": f"{int(time.time())}"})
                     renderState = 3
         time.sleep(0.5)        
 
